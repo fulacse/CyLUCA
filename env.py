@@ -1,6 +1,7 @@
 from random import randint
 
 import gymnasium as gym
+import numpy as np
 
 from tools.CyPred import cypred
 from tools.file_reader import parse_ss2_file
@@ -25,14 +26,14 @@ class LUCAEnv(gym.Env):
         self.SS_to_nums = {'[PAD]': 0, '[AIR]': 1, '[UNKNOWN]': 2, 'H': 3, 'E': 4, 'C': 5}
         self.nums_to_SS = {num: SS for SS, num in self.SS_to_nums.items()}
         self.observation_space = gym.spaces.Dict({
-            'primary': gym.spaces.Box(low=0, high=len(self.AA_to_nums), shape=(1, 128)),
+            'primary': gym.spaces.Box(low=0, high=len(self.AA_to_nums), shape=(1, 128), dtype=np.int32),
             # 128 is the max length of the protein
-            'ss': gym.spaces.Box(low=0, high=len(self.SS_to_nums), shape=(1, 128)),
+            'ss': gym.spaces.Box(low=0, high=len(self.SS_to_nums), shape=(1, 128), dtype=np.int32),
             # 128 is the max length of the protein
-            'mask_pos': gym.spaces.Box(low=0, high=128, shape=(1, 1)),  # value between 0 and 128
-            'x': gym.spaces.Box(low=-1, high=1, shape=(1, 128)),  # value between 0 and 1, -1 if not present or unknown
-            'y': gym.spaces.Box(low=-1, high=1, shape=(1, 128)),  # value between 0 and 1, -1 if not present or unknown
-            'z': gym.spaces.Box(low=-1, high=1, shape=(1, 128)),  # value between 0 and 1, -1 if not present or unknown
+            'mask_pos': gym.spaces.Box(low=0, high=128, shape=(1, 1), dtype=np.int32),  # value between 0 and 128
+            'x': gym.spaces.Box(low=-2, high=1, shape=(1, 128), dtype=np.float32),  # value between 0 and 1, -1 if unknown, -2 if not present
+            'y': gym.spaces.Box(low=-2, high=1, shape=(1, 128), dtype=np.float32),  # value between 0 and 1, -1 if unknown, -2 if not present
+            'z': gym.spaces.Box(low=-2, high=1, shape=(1, 128), dtype=np.float32),  # value between 0 and 1, -1 if unknown, -2 if not present
         })
 
         self.acid_amino = []
@@ -47,14 +48,14 @@ class LUCAEnv(gym.Env):
     def step(self, action):
         self.current_step += 1
 
-        if action == 0: # remove one amino acid
+        if action == 0:  # remove one amino acid
             del self.acid_amino[self.start_mask_pos - 1]
             del self.secondary_structure[self.start_mask_pos - 1]
             del self.x[self.start_mask_pos - 1]
             del self.y[self.start_mask_pos - 1]
             del self.z[self.start_mask_pos - 1]
             self.start_mask_pos -= 1
-        else: # add one amino acid
+        else:  # add one amino acid
             self.acid_amino = self.acid_amino[:self.start_mask_pos] + [action] + self.acid_amino[self.start_mask_pos:]
             self.secondary_structure = self.secondary_structure[:self.start_mask_pos] + [
                 self.SS_to_nums['[UNKNOWN]']] + self.secondary_structure[self.start_mask_pos:]
@@ -63,25 +64,33 @@ class LUCAEnv(gym.Env):
             self.z = self.z[:self.start_mask_pos] + [-1] + self.z[self.start_mask_pos:]
             self.start_mask_pos += 1
 
-        cypred_score = cypred(''.join([self.nums_to_AA[aa] for aa in self.acid_amino])) # score given by cypred, > 0 if the protein is cycle and < 0 if not
-        done = self.current_step >= self.max_steps or cypred_score > 0 # done if the protein is cycle or the max steps is reached
+        cypred_score = cypred(''.join([self.nums_to_AA[aa] for aa in
+                                       self.acid_amino]))  # score given by cypred, > 0 if the protein is cycle and < 0 if not
+        done = self.current_step >= self.max_steps or cypred_score > 0  # done if the protein is cycle or the max steps is reached
 
         if done:
             reward = cypred_score
         else:
-            reward = -0.1 if action == 0 else 0 # -0.1 if the action is remove, 0 if the action is add
+            reward = -0.1 if action == 0 else 0  # -0.1 if the action is remove, 0 if the action is add
 
         return {
-            'primary': self.acid_amino,
-            'ss': self.secondary_structure,
-            'mask_pos': self.start_mask_pos,
-            'x': self.x,
-            'y': self.y,
-            'z': self.z
+            'primary': list_to_numpy(self.acid_amino, self.AA_to_nums['[PAD]'], np.int32),
+            'ss': list_to_numpy(self.secondary_structure, self.SS_to_nums['[PAD]'], np.int32),
+            'mask_pos': np.array([[self.start_mask_pos]], np.int32),
+            'x': list_to_numpy(self.x, -2, np.float32),
+            'y': list_to_numpy(self.y, -2, np.float32),
+            'z': list_to_numpy(self.z, -2, np.float32)
         }, reward, done, done, {}
 
-    def reset(self):
+    def reset(self,seed=None, **kwargs):
+        super().reset(seed=seed, **kwargs)
         self.current_step = 0
+        self.acid_amino = []
+        self.secondary_structure = []
+        self.start_mask_pos = 0
+        self.x = []
+        self.y = []
+        self.z = []
 
         path = "data/5D8VA/20f6ee26-e2ab-11ee-905a-00163e100d53.ss2"
         predictions = parse_ss2_file(path)
@@ -105,22 +114,39 @@ class LUCAEnv(gym.Env):
         self.z = self.z[:self.start_mask_pos] + [-1] + self.z[self.start_mask_pos + len_mask:]
 
         return {
-            'primary': self.acid_amino,
-            'ss': self.secondary_structure,
-            'mask_pos': self.start_mask_pos,
-            'x': self.x,
-            'y': self.y,
-            'z': self.z
+            'primary': list_to_numpy(self.acid_amino, self.AA_to_nums['[PAD]'], np.int32),
+            'ss': list_to_numpy(self.secondary_structure, self.SS_to_nums['[PAD]'], np.int32),
+            'mask_pos': np.array([[self.start_mask_pos]], np.int32),
+            'x': list_to_numpy(self.x, -2, np.float32),
+            'y': list_to_numpy(self.y, -2, np.float32),
+            'z': list_to_numpy(self.z, -2, np.float32)
         }, {}
 
     def render(self, mode='human'):
         print(f"Current step: {self.current_step}")
+        print(f"\tMask position: {self.start_mask_pos}")
         print(f"\tProtein: {''.join([self.nums_to_AA[aa] for aa in self.acid_amino])}")
         print(f"\tSecondary structure: {''.join([self.nums_to_SS[ss] for ss in self.secondary_structure])}")
-        print(f"\tMask position: {self.start_mask_pos}")
         print(f"\tX: {self.x}")
         print(f"\tY: {self.y}")
         print(f"\tZ: {self.z}")
 
     def close(self):
         pass
+
+
+def list_to_numpy(list, pad, dtype, shape=(1, 128)) -> np.array:
+    # Convert list to a NumPy array
+    initial_array = np.array(list, dtype=dtype)
+
+    # Ensure the array is 2D with a single row
+    initial_array_reshaped = initial_array.reshape(1, -1)
+
+    # Calculate the padding width needed
+    padding_width = shape[1] - initial_array_reshaped.shape[1]
+
+    # Pad the array with zeros to reach the desired shape
+    padded_array = np.pad(initial_array_reshaped, ((0, 0), (0, padding_width)), 'constant', constant_values=pad)
+
+    assert padded_array.shape == shape, f"Expected shape {shape} but got shape {padded_array.shape}"
+    return padded_array
