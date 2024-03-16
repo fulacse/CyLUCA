@@ -31,9 +31,9 @@ class LUCAEnv(gym.Env):
             'ss': gym.spaces.Box(low=0, high=len(self.SS_to_nums), shape=(1, 128), dtype=np.int32),
             # 128 is the max length of the protein
             'mask_pos': gym.spaces.Box(low=0, high=128, shape=(1, 1), dtype=np.int32),  # value between 0 and 128
-            'x': gym.spaces.Box(low=-2, high=1, shape=(1, 128), dtype=np.float32),  # value between 0 and 1, -1 if unknown, -2 if not present
-            'y': gym.spaces.Box(low=-2, high=1, shape=(1, 128), dtype=np.float32),  # value between 0 and 1, -1 if unknown, -2 if not present
-            'z': gym.spaces.Box(low=-2, high=1, shape=(1, 128), dtype=np.float32),  # value between 0 and 1, -1 if unknown, -2 if not present
+            'x': gym.spaces.Box(low=-3, high=1, shape=(1, 128), dtype=np.float32),  # value between 0 and 1, -1 if air, -2 if unknown, -3 if padding
+            'y': gym.spaces.Box(low=-3, high=1, shape=(1, 128), dtype=np.float32),  # value between 0 and 1, -1 if air, -2 if unknown, -3 if padding
+            'z': gym.spaces.Box(low=-3, high=1, shape=(1, 128), dtype=np.float32),  # value between 0 and 1, -1 if air, -2 if unknown, -3 if padding
         })
 
         self.acid_amino = []
@@ -59,9 +59,9 @@ class LUCAEnv(gym.Env):
             self.acid_amino = self.acid_amino[:self.start_mask_pos] + [action] + self.acid_amino[self.start_mask_pos:]
             self.secondary_structure = self.secondary_structure[:self.start_mask_pos] + [
                 self.SS_to_nums['[UNKNOWN]']] + self.secondary_structure[self.start_mask_pos:]
-            self.x = self.x[:self.start_mask_pos] + [-1] + self.x[self.start_mask_pos:]
-            self.y = self.y[:self.start_mask_pos] + [-1] + self.y[self.start_mask_pos:]
-            self.z = self.z[:self.start_mask_pos] + [-1] + self.z[self.start_mask_pos:]
+            self.x = self.x[:self.start_mask_pos] + [-2] + self.x[self.start_mask_pos:]
+            self.y = self.y[:self.start_mask_pos] + [-2] + self.y[self.start_mask_pos:]
+            self.z = self.z[:self.start_mask_pos] + [-2] + self.z[self.start_mask_pos:]
             self.start_mask_pos += 1
 
         cypred_score = cypred(''.join([self.nums_to_AA[aa] for aa in
@@ -77,9 +77,9 @@ class LUCAEnv(gym.Env):
             'primary': list_to_numpy(self.acid_amino, self.AA_to_nums['[PAD]'], np.int32),
             'ss': list_to_numpy(self.secondary_structure, self.SS_to_nums['[PAD]'], np.int32),
             'mask_pos': np.array([[self.start_mask_pos]], np.int32),
-            'x': list_to_numpy(self.x, -2, np.float32),
-            'y': list_to_numpy(self.y, -2, np.float32),
-            'z': list_to_numpy(self.z, -2, np.float32)
+            'x': list_to_numpy(self.x, -3, np.float32),
+            'y': list_to_numpy(self.y, -3, np.float32),
+            'z': list_to_numpy(self.z, -3, np.float32)
         }, reward, done, done, {}
 
     def reset(self,seed=None, **kwargs):
@@ -117,9 +117,9 @@ class LUCAEnv(gym.Env):
             'primary': list_to_numpy(self.acid_amino, self.AA_to_nums['[PAD]'], np.int32),
             'ss': list_to_numpy(self.secondary_structure, self.SS_to_nums['[PAD]'], np.int32),
             'mask_pos': np.array([[self.start_mask_pos]], np.int32),
-            'x': list_to_numpy(self.x, -2, np.float32),
-            'y': list_to_numpy(self.y, -2, np.float32),
-            'z': list_to_numpy(self.z, -2, np.float32)
+            'x': list_to_numpy(self.x, -3, np.float32),
+            'y': list_to_numpy(self.y, -3, np.float32),
+            'z': list_to_numpy(self.z, -3, np.float32)
         }, {}
 
     def render(self, mode='human'):
