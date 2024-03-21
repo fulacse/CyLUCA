@@ -18,8 +18,7 @@ class LUCAEnv(gym.Env):
 
         self.actions_to_nums = {'[REMOVE]': 0, 'Q': 2, 'P': 3, 'A': 4, 'V': 5, 'T': 6, 'G': 7, 'E': 8, 'Y': 9,
                                 'D': 10, 'X': 11, 'N': 12, 'S': 13, 'I': 14, 'K': 15, 'Z': 16, 'F': 17, 'H': 18,
-                                'R': 19,
-                                'M': 20, 'W': 21, 'C': 22, 'L': 23}
+                                'R': 19, 'M': 20, 'W': 21, 'C': 22, 'L': 23}
         self.nums_to_actions = {num: action for action, num in self.actions_to_nums.items()}
         self.action_space = gym.spaces.Discrete(len(self.actions_to_nums))
         self.AA_to_nums = {'[PAD]': 0, '[AIR]': 1, 'Q': 2, 'P': 3, 'A': 4, 'V': 5, 'T': 6, 'G': 7, 'E': 8, 'Y': 9,
