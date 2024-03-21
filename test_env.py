@@ -2,7 +2,7 @@ from gymnasium.utils.env_checker import check_env
 
 from env import LUCAEnv
 
-env = LUCAEnv()
+env = LUCAEnv(traget=1)
 check_env(env)
 
 observation, info = env.reset()

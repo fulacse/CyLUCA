@@ -1,3 +1,4 @@
+import os
 from random import randint
 
 import gymnasium as gym
@@ -8,15 +9,17 @@ from tools.file_reader import parse_ss2_file
 
 
 class LUCAEnv(gym.Env):
-    def __init__(self, min_pred=2, max_pred=8, max_steps=10):
+    def __init__(self, min_pred=2, max_pred=8, max_steps=10, traget=0):
         super(LUCAEnv, self).__init__()
         self.min_pred = min_pred
         self.max_pred = max_pred
         self.max_steps = max_steps
+        self.traget = traget
 
-        self.actions_to_nums = {'[REMOVE]': 0, 'Q': 1, 'P': 2, 'A': 3, 'V': 4, 'T': 5, 'G': 6, 'E': 7, 'Y': 8, 'D': 9,
-                                'X': 10, 'N': 11, 'S': 12, 'I': 13, 'K': 14, 'Z': 15, 'F': 16, 'H': 17, 'R': 18,
-                                'M': 19, 'W': 20, 'C': 21, 'L': 22}
+        self.actions_to_nums = {'[REMOVE]': 0, 'Q': 2, 'P': 3, 'A': 4, 'V': 5, 'T': 6, 'G': 7, 'E': 8, 'Y': 9,
+                                'D': 10, 'X': 11, 'N': 12, 'S': 13, 'I': 14, 'K': 15, 'Z': 16, 'F': 17, 'H': 18,
+                                'R': 19,
+                                'M': 20, 'W': 21, 'C': 22, 'L': 23}
         self.nums_to_actions = {num: action for action, num in self.actions_to_nums.items()}
         self.action_space = gym.spaces.Discrete(len(self.actions_to_nums))
         self.AA_to_nums = {'[PAD]': 0, '[AIR]': 1, 'Q': 2, 'P': 3, 'A': 4, 'V': 5, 'T': 6, 'G': 7, 'E': 8, 'Y': 9,
@@ -31,9 +34,12 @@ class LUCAEnv(gym.Env):
             'ss': gym.spaces.Box(low=0, high=len(self.SS_to_nums), shape=(1, 128), dtype=np.int32),
             # 128 is the max length of the protein
             'mask_pos': gym.spaces.Box(low=0, high=128, shape=(1, 1), dtype=np.int32),  # value between 0 and 128
-            'x': gym.spaces.Box(low=-3, high=1, shape=(1, 128), dtype=np.float32),  # value between 0 and 1, -1 if air, -2 if unknown, -3 if padding
-            'y': gym.spaces.Box(low=-3, high=1, shape=(1, 128), dtype=np.float32),  # value between 0 and 1, -1 if air, -2 if unknown, -3 if padding
-            'z': gym.spaces.Box(low=-3, high=1, shape=(1, 128), dtype=np.float32),  # value between 0 and 1, -1 if air, -2 if unknown, -3 if padding
+            'x': gym.spaces.Box(low=-3, high=1, shape=(1, 128), dtype=np.float32),
+            # value between 0 and 1, -1 if air, -2 if unknown, -3 if padding
+            'y': gym.spaces.Box(low=-3, high=1, shape=(1, 128), dtype=np.float32),
+            # value between 0 and 1, -1 if air, -2 if unknown, -3 if padding
+            'z': gym.spaces.Box(low=-3, high=1, shape=(1, 128), dtype=np.float32),
+            # value between 0 and 1, -1 if air, -2 if unknown, -3 if padding
         })
 
         self.acid_amino = []
@@ -56,7 +62,8 @@ class LUCAEnv(gym.Env):
             del self.z[self.start_mask_pos - 1]
             self.start_mask_pos -= 1
         else:  # add one amino acid
-            self.acid_amino = self.acid_amino[:self.start_mask_pos] + [action] + self.acid_amino[self.start_mask_pos:]
+            self.acid_amino = self.acid_amino[:self.start_mask_pos] + [action + 1] + self.acid_amino[
+                                                                                     self.start_mask_pos:]
             self.secondary_structure = self.secondary_structure[:self.start_mask_pos] + [
                 self.SS_to_nums['[UNKNOWN]']] + self.secondary_structure[self.start_mask_pos:]
             self.x = self.x[:self.start_mask_pos] + [-2] + self.x[self.start_mask_pos:]
@@ -66,10 +73,16 @@ class LUCAEnv(gym.Env):
 
         cypred_score = cypred(''.join([self.nums_to_AA[aa] for aa in
                                        self.acid_amino]))  # score given by cypred, > 0 if the protein is cycle and < 0 if not
-        done = self.current_step >= self.max_steps or cypred_score > 0  # done if the protein is cycle or the max steps is reached
+        done = self.current_step >= self.max_steps or cypred_score > self.traget  # done if the protein is cycle or the max steps is reached
 
         if done:
             reward = cypred_score
+            if cypred_score > 0:
+                del self.acid_amino[self.start_mask_pos]
+                del self.secondary_structure[self.start_mask_pos]
+                del self.x[self.start_mask_pos]
+                del self.y[self.start_mask_pos]
+                del self.z[self.start_mask_pos]
         else:
             reward = -0.1 if action == 0 else 0  # -0.1 if the action is remove, 0 if the action is add
 
@@ -82,7 +95,7 @@ class LUCAEnv(gym.Env):
             'z': list_to_numpy(self.z, -3, np.float32)
         }, reward, done, done, {}
 
-    def reset(self,seed=None, **kwargs):
+    def reset(self, seed=None, **kwargs):
         super().reset(seed=seed, **kwargs)
         self.current_step = 0
         self.acid_amino = []
@@ -92,7 +105,8 @@ class LUCAEnv(gym.Env):
         self.y = []
         self.z = []
 
-        path = "data/5D8VA/20f6ee26-e2ab-11ee-905a-00163e100d53.ss2"
+        files = get_all_ss2_files(".")
+        path = files[randint(0, len(files) - 1)]
         predictions = parse_ss2_file(path)
         for prediction in predictions:
             self.acid_amino.append(self.AA_to_nums[prediction[1]])
@@ -150,3 +164,25 @@ def list_to_numpy(list, pad, dtype, shape=(1, 128)) -> np.array:
 
     assert padded_array.shape == shape, f"Expected shape {shape} but got shape {padded_array.shape}"
     return padded_array
+
+
+def get_all_ss2_files(directory):
+    """
+    Get all .ss2 files under the specified directory including subdirectories.
+
+    Args:
+    directory (str): The path to the directory to search in.
+
+    Returns:
+    list: A list of paths to .ss2 files.
+    """
+    ss2_files = []
+    # Walk through the directory
+    for root, dirs, files in os.walk(directory):
+        for file in files:
+            # Check the extension of the files
+            if file.endswith('.ss2'):
+                # If it's an .ss2, construct the full path and add to the list
+                full_path = os.path.join(root, file)
+                ss2_files.append(full_path)
+    return ss2_files

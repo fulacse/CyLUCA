@@ -1,7 +1,0 @@
-job,step_number,type,name,version,parameters
-psipred,1,Dataset,uniref90,latest,null
-psipred,1,Dataset,hhdb uniclust30,2018_08,null
-psipred,1,Software,psiblast,2.2.26,-a 2 -b 0 -j 20 -h 0.01 -I F
-psipred,1,Software,hhblits,2.0.16,-iterations 3 -diff inf -cov 10 -Z 10000 -B 10000 -maxfilt 10000 -maxmem 5 -norealign
-psipred,2,Software,psipred,4.1,null
-psipred,3,Software,psipass2,4.1,null
