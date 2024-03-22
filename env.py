@@ -9,12 +9,13 @@ from tools.file_reader import parse_ss2_file
 
 
 class LUCAEnv(gym.Env):
-    def __init__(self, min_pred=2, max_pred=8, max_steps=10, traget=0):
+    def __init__(self, min_pred=2, max_pred=8, max_steps=10, traget=0, pad_length=128):
         super(LUCAEnv, self).__init__()
         self.min_pred = min_pred
         self.max_pred = max_pred
         self.max_steps = max_steps
         self.traget = traget
+        self.pad_length = pad_length
 
         self.actions_to_nums = {'[REMOVE]': 0, 'Q': 2, 'P': 3, 'A': 4, 'V': 5, 'T': 6, 'G': 7, 'E': 8, 'Y': 9,
                                 'D': 10, 'X': 11, 'N': 12, 'S': 13, 'I': 14, 'K': 15, 'Z': 16, 'F': 17, 'H': 18,
@@ -28,16 +29,16 @@ class LUCAEnv(gym.Env):
         self.SS_to_nums = {'[PAD]': 0, '[AIR]': 1, '[UNKNOWN]': 2, 'H': 3, 'E': 4, 'C': 5}
         self.nums_to_SS = {num: SS for SS, num in self.SS_to_nums.items()}
         self.observation_space = gym.spaces.Dict({
-            'primary': gym.spaces.Box(low=0, high=len(self.AA_to_nums), shape=(1, 128), dtype=np.int32),
+            'primary': gym.spaces.Box(low=0, high=len(self.AA_to_nums), shape=(1, self.pad_length), dtype=np.int32),
+            # self.pad_length is the max length of the protein
+            'ss': gym.spaces.Box(low=0, high=len(self.SS_to_nums), shape=(1, self.pad_length), dtype=np.int32),
             # 128 is the max length of the protein
-            'ss': gym.spaces.Box(low=0, high=len(self.SS_to_nums), shape=(1, 128), dtype=np.int32),
-            # 128 is the max length of the protein
-            'mask_pos': gym.spaces.Box(low=0, high=128, shape=(1, 1), dtype=np.int32),  # value between 0 and 128
-            'x': gym.spaces.Box(low=-3, high=1, shape=(1, 128), dtype=np.float32),
+            'mask_pos': gym.spaces.Box(low=0, high=self.pad_length, shape=(1, 1), dtype=np.int32),  # value between 0 and 128
+            'x': gym.spaces.Box(low=-3, high=1, shape=(1, self.pad_length), dtype=np.float32),
             # value between 0 and 1, -1 if air, -2 if unknown, -3 if padding
-            'y': gym.spaces.Box(low=-3, high=1, shape=(1, 128), dtype=np.float32),
+            'y': gym.spaces.Box(low=-3, high=1, shape=(1, self.pad_length), dtype=np.float32),
             # value between 0 and 1, -1 if air, -2 if unknown, -3 if padding
-            'z': gym.spaces.Box(low=-3, high=1, shape=(1, 128), dtype=np.float32),
+            'z': gym.spaces.Box(low=-3, high=1, shape=(1, self.pad_length), dtype=np.float32),
             # value between 0 and 1, -1 if air, -2 if unknown, -3 if padding
         })
 
@@ -86,12 +87,12 @@ class LUCAEnv(gym.Env):
             reward = -0.1 if action == 0 else 0  # -0.1 if the action is remove, 0 if the action is add
 
         return {
-            'primary': list_to_numpy(self.acid_amino, self.AA_to_nums['[PAD]'], np.int32),
-            'ss': list_to_numpy(self.secondary_structure, self.SS_to_nums['[PAD]'], np.int32),
+            'primary': list_to_numpy(self.acid_amino, self.AA_to_nums['[PAD]'], np.int32, (1, self.pad_length)),
+            'ss': list_to_numpy(self.secondary_structure, self.SS_to_nums['[PAD]'], np.int32, (1, self.pad_length)),
             'mask_pos': np.array([[self.start_mask_pos]], np.int32),
-            'x': list_to_numpy(self.x, -3, np.float32),
-            'y': list_to_numpy(self.y, -3, np.float32),
-            'z': list_to_numpy(self.z, -3, np.float32)
+            'x': list_to_numpy(self.x, -3, np.float32, (1, self.pad_length)),
+            'y': list_to_numpy(self.y, -3, np.float32, (1, self.pad_length)),
+            'z': list_to_numpy(self.z, -3, np.float32, (1, self.pad_length))
         }, reward, done, done, {}
 
     def reset(self, seed=None, **kwargs):
@@ -127,12 +128,12 @@ class LUCAEnv(gym.Env):
         self.z = self.z[:self.start_mask_pos] + [-1] + self.z[self.start_mask_pos + len_mask:]
 
         return {
-            'primary': list_to_numpy(self.acid_amino, self.AA_to_nums['[PAD]'], np.int32),
-            'ss': list_to_numpy(self.secondary_structure, self.SS_to_nums['[PAD]'], np.int32),
+            'primary': list_to_numpy(self.acid_amino, self.AA_to_nums['[PAD]'], np.int32, (1, self.pad_length)),
+            'ss': list_to_numpy(self.secondary_structure, self.SS_to_nums['[PAD]'], np.int32, (1, self.pad_length)),
             'mask_pos': np.array([[self.start_mask_pos]], np.int32),
-            'x': list_to_numpy(self.x, -3, np.float32),
-            'y': list_to_numpy(self.y, -3, np.float32),
-            'z': list_to_numpy(self.z, -3, np.float32)
+            'x': list_to_numpy(self.x, -3, np.float32, (1, self.pad_length)),
+            'y': list_to_numpy(self.y, -3, np.float32, (1, self.pad_length)),
+            'z': list_to_numpy(self.z, -3, np.float32, (1, self.pad_length))
         }, {}
 
     def render(self, mode='human'):
