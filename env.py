@@ -9,12 +9,12 @@ from tools.file_reader import parse_ss2_file
 
 
 class LUCAEnv(gym.Env):
-    def __init__(self, min_pred=2, max_pred=8, max_steps=10, traget=0, pad_length=128):
+    def __init__(self, min_pred=2, max_pred=8, max_steps=10, traget_score=0, pad_length=128):
         super(LUCAEnv, self).__init__()
         self.min_pred = min_pred
         self.max_pred = max_pred
         self.max_steps = max_steps
-        self.traget = traget
+        self.traget = traget_score
         self.pad_length = pad_length
 
         self.actions_to_nums = {'[REMOVE]': 0, 'Q': 2, 'P': 3, 'A': 4, 'V': 5, 'T': 6, 'G': 7, 'E': 8, 'Y': 9,

@@ -1,10 +1,8 @@
-from torch import nn
-from torch import Tensor
+import gymnasium as gym
 import torch
 import torch.nn.functional as F
-import gymnasium as gym
-
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
+from torch import nn
 
 
 class ElMo(nn.Module):
@@ -18,11 +16,11 @@ class ElMo(nn.Module):
     def forward(self, observation):
         embed = self.embedding(observation)
         lstm_out, _ = self.lstm(embed)
-        #assert lstm_out.shape == (32, 128, 1024)
+        # assert lstm_out.shape == (32, 128, 1024)
         mask_pos = observation['mask_pos'][:, :, None].expand(-1, -1, lstm_out.size(-1)).to(dtype=torch.long)
-        #assert mask_pos.shape == (32, 1, 1024)
+        # assert mask_pos.shape == (32, 1, 1024)
         lstm_out = lstm_out.gather(1, mask_pos)
-        #assert lstm_out.shape == (32, 1, 1024)
+        # assert lstm_out.shape == (32, 1, 1024)
         return lstm_out
 
 
@@ -37,9 +35,11 @@ class Embedding(nn.Module):
         primary_embed = self.primary_embed(observation['primary'].to(dtype=torch.long))
         ss_embed = self.ss_embed(observation['ss'].to(dtype=torch.long))
         embed = primary_embed + ss_embed
-        embed *= F.tanh(observation['x'].unsqueeze(-1)) * F.tanh(observation['y'].unsqueeze(-1)) * F.tanh(observation['z'].unsqueeze(-1))
-        #assert embed.shape == (32, 128, 768)
+        embed *= F.tanh(observation['x'].unsqueeze(-1)) * F.tanh(observation['y'].unsqueeze(-1)) * F.tanh(
+            observation['z'].unsqueeze(-1))
+        # assert embed.shape == (32, 128, 768)
         return self.norm(embed)
+
 
 class CustomNetwork(nn.Module):
     def __init__(self, feature_dim, latent_dim_pi=64, latent_dim_vf=64):
@@ -60,8 +60,10 @@ class CustomNetwork(nn.Module):
     def forward_critic(self, features):
         return self.headValue(features)
 
+
 class CustomCombinedExtractor(BaseFeaturesExtractor):
-    def __init__(self, observation_space: gym.spaces.Dict, features_dim: int = 768, hidden_dim: int = 512, n_layer: int = 2):
+    def __init__(self, observation_space: gym.spaces.Dict, features_dim: int = 768, hidden_dim: int = 512,
+                 n_layer: int = 2):
         # We do not know features-dim here before going over all the items,
         # so put something dummy for now. PyTorch requires calling
         # nn.Module.__init__ before adding modules
@@ -70,6 +72,5 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
         self.elmo = ElMo(observation_space['primary'].shape[1], features_dim, hidden_dim, n_layer)
 
     def forward(self, observations):
-        for key in observations.keys():
-            observations[key] = observations[key].squeeze(1)
+        for key in observations.keys(): observations[key] = observations[key].squeeze(1)
         return self.elmo(observations)
