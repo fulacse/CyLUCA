@@ -45,20 +45,17 @@ class CustomNetwork(nn.Module):
     def __init__(self, feature_dim, latent_dim_pi=64, latent_dim_vf=64):
         super().__init__()
 
-        self.latent_dim_pi = latent_dim_pi
-        self.latent_dim_vf = latent_dim_vf
-
-        self.headPolicy = nn.Linear(feature_dim * 2, self.latent_dim_pi)
-        self.headValue = nn.Linear(feature_dim * 2, self.latent_dim_vf)
+        self.latent_dim_pi = feature_dim * 2
+        self.latent_dim_vf = feature_dim * 2
 
     def forward(self, features):
         return self.forward_actor(features), self.forward_critic(features)
 
     def forward_actor(self, features):
-        return self.headPolicy(features)
+        return features
 
     def forward_critic(self, features):
-        return self.headValue(features)
+        return features
 
 
 class CustomCombinedExtractor(BaseFeaturesExtractor):

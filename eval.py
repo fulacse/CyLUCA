@@ -1,8 +1,8 @@
 from stable_baselines3 import PPO
 from env import LUCAEnv
 
-model = PPO.load("trained/ppo_CyLUCA_3")
-env = LUCAEnv(traget_score=1, pad_length=64)
+model = PPO.load("trained/ppo_CyLUCA_8000")
+env = LUCAEnv(traget_score=1, pad_length=128)
 
 obs, info = env.reset()
 env.render("human")
