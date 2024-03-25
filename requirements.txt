@@ -1,4 +1,4 @@
 numpy
 gymnasium
 torch
-stable_baselines3
+stable-baselines3
