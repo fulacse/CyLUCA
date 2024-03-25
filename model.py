@@ -35,7 +35,7 @@ class Embedding(nn.Module):
         primary_embed = self.primary_embed(observation['primary'].to(dtype=torch.long))
         ss_embed = self.ss_embed(observation['ss'].to(dtype=torch.long))
         embed = primary_embed + ss_embed
-        embed *= F.tanh(observation['x'].unsqueeze(-1)) * F.tanh(observation['y'].unsqueeze(-1)) * F.tanh(
+        embed += F.tanh(observation['x'].unsqueeze(-1)) * F.tanh(observation['y'].unsqueeze(-1)) * F.tanh(
             observation['z'].unsqueeze(-1))
         # assert embed.shape == (32, 128, 768)
         return self.norm(embed)

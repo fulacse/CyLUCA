@@ -7,7 +7,7 @@ from env import LUCAEnv
 from model import CustomNetwork, CustomCombinedExtractor
 
 # Create environment
-env = LUCAEnv(traget_score=1, pad_length=128)
+env = LUCAEnv(pad_length=128)
 
 
 # Custom Policy network
@@ -22,7 +22,7 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
 
 
 class CustomCallback(BaseCallback):
-    def __init__(self, save_freq, save_path, T_0=1, T_mult=2, eta_min=0, eta_max=0.04, verbose=0):
+    def __init__(self, save_freq, save_path, T_0=1, T_mult=2, eta_min=0, eta_max=0.02, verbose=0):
         super(CustomCallback, self).__init__(verbose)
         self.save_freq = save_freq
         self.save_path = save_path
@@ -64,10 +64,10 @@ class CustomCallback(BaseCallback):
 
 policy_kwargs = dict(
     features_extractor_class=CustomCombinedExtractor,
-    features_extractor_kwargs=dict(features_dim=768, hidden_dim=2048, n_layer=8),
-    custom_parame=dict(hidden_dim=2048),
+    features_extractor_kwargs=dict(features_dim=768, hidden_dim=512, n_layer=2),
+    custom_parame=dict(hidden_dim=512),
 )
-model = PPO(CustomActorCriticPolicy, env, policy_kwargs=policy_kwargs, verbose=1, learning_rate=0.0001, n_steps=10,
+model = PPO(CustomActorCriticPolicy, env, policy_kwargs=policy_kwargs, verbose=2, learning_rate=0.0001, n_steps=10,
             batch_size=10, n_epochs=8, gae_lambda=1, clip_range=0.1, tensorboard_log="./tensorboard", )
-custom_callback = CustomCallback(save_freq=1000, save_path='./trained/ppo_CyLUCA')
+custom_callback = CustomCallback(save_freq=1_000, save_path='./trained/ppo_CyLUCA')
 model.learn(total_timesteps=10_000, progress_bar=True, callback=custom_callback)

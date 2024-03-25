@@ -9,16 +9,15 @@ from tools.file_reader import parse_ss2_file
 
 
 class LUCAEnv(gym.Env):
-    def __init__(self, min_pred=2, max_pred=8, max_steps=10, traget_score=0, pad_length=128):
+    def __init__(self, min_pred=2, max_pred=8, max_steps=10, pad_length=128):
         super(LUCAEnv, self).__init__()
         self.min_pred = min_pred
         self.max_pred = max_pred
         self.max_steps = max_steps
-        self.traget = traget_score
         self.pad_length = pad_length
 
-        self.actions_to_nums = {'[REMOVE]': 0, 'Q': 2, 'P': 3, 'A': 4, 'V': 5, 'T': 6, 'G': 7, 'E': 8, 'Y': 9,
-                                'D': 10, 'X': 11, 'N': 12, 'S': 13, 'I': 14, 'K': 15, 'Z': 16, 'F': 17, 'H': 18,
+        self.actions_to_nums = {'[REMOVE]': 0, '[SUBMIT]': 1, 'Q': 2, 'P': 3, 'A': 4, 'V': 5, 'T': 6, 'G': 7, 'E': 8,
+                                'Y': 9, 'D': 10, 'X': 11, 'N': 12, 'S': 13, 'I': 14, 'K': 15, 'Z': 16, 'F': 17, 'H': 18,
                                 'R': 19, 'M': 20, 'W': 21, 'C': 22, 'L': 23}
         self.nums_to_actions = {num: action for action, num in self.actions_to_nums.items()}
         self.action_space = gym.spaces.Discrete(len(self.actions_to_nums))
@@ -33,7 +32,8 @@ class LUCAEnv(gym.Env):
             # self.pad_length is the max length of the protein
             'ss': gym.spaces.Box(low=0, high=len(self.SS_to_nums), shape=(1, self.pad_length), dtype=np.int32),
             # 128 is the max length of the protein
-            'mask_pos': gym.spaces.Box(low=0, high=self.pad_length, shape=(1, 1), dtype=np.int32),  # value between 0 and 128
+            'mask_pos': gym.spaces.Box(low=0, high=self.pad_length, shape=(1, 1), dtype=np.int32),
+            # value between 0 and 128
             'x': gym.spaces.Box(low=-3, high=1, shape=(1, self.pad_length), dtype=np.float32),
             # value between 0 and 1, -1 if air, -2 if unknown, -3 if padding
             'y': gym.spaces.Box(low=-3, high=1, shape=(1, self.pad_length), dtype=np.float32),
@@ -48,11 +48,13 @@ class LUCAEnv(gym.Env):
         self.x = []
         self.y = []
         self.z = []
-
+        self.amino_acid_completed = []
         self.current_step = 0
 
     def step(self, action):
         self.current_step += 1
+        reward = 0
+        done = False
 
         if action == 0:  # remove one amino acid
             del self.acid_amino[self.start_mask_pos - 1]
@@ -61,19 +63,23 @@ class LUCAEnv(gym.Env):
             del self.y[self.start_mask_pos - 1]
             del self.z[self.start_mask_pos - 1]
             self.start_mask_pos -= 1
+            if len(self.amino_acid_completed) > 0: self.amino_acid_completed.pop()
+            reward = -0.1
+        elif action == 1:  # submit
+            done = True
         else:  # add one amino acid
-            self.acid_amino = self.acid_amino[:self.start_mask_pos] + [action + 1] + self.acid_amino[
-                                                                                     self.start_mask_pos:]
+            self.acid_amino = self.acid_amino[:self.start_mask_pos] + [action] + self.acid_amino[self.start_mask_pos:]
             self.secondary_structure = self.secondary_structure[:self.start_mask_pos] + [
                 self.SS_to_nums['[UNKNOWN]']] + self.secondary_structure[self.start_mask_pos:]
             self.x = self.x[:self.start_mask_pos] + [-2] + self.x[self.start_mask_pos:]
             self.y = self.y[:self.start_mask_pos] + [-2] + self.y[self.start_mask_pos:]
             self.z = self.z[:self.start_mask_pos] + [-2] + self.z[self.start_mask_pos:]
             self.start_mask_pos += 1
+            self.amino_acid_completed.append(self.nums_to_actions[int(action)])
 
-        cypred_score = cypred(''.join([self.nums_to_AA[aa] for aa in
-                                       self.acid_amino]))  # score given by cypred, > 0 if the protein is cycle and < 0 if not
-        done = self.current_step >= self.max_steps or cypred_score > self.traget  # done if the protein is cycle or the max steps is reached
+        sequence = ''.join([self.nums_to_AA[int(aa)] for aa in self.acid_amino if int(aa) != self.AA_to_nums['[AIR]']])
+        cypred_score = cypred(sequence)  # score given by cypred, > 0 if the protein is cycle and < 0 if not
+        done = self.current_step >= self.max_steps or done  # done if submit or the max steps is reached
 
         if done:
             reward = cypred_score
@@ -83,8 +89,6 @@ class LUCAEnv(gym.Env):
                 del self.x[self.start_mask_pos]
                 del self.y[self.start_mask_pos]
                 del self.z[self.start_mask_pos]
-        else:
-            reward = -0.1 if action == 0 else 0  # -0.1 if the action is remove, 0 if the action is add
 
         return {
             'primary': list_to_numpy(self.acid_amino, self.AA_to_nums['[PAD]'], np.int32, (1, self.pad_length)),
@@ -95,7 +99,7 @@ class LUCAEnv(gym.Env):
             'z': list_to_numpy(self.z, -3, np.float32, (1, self.pad_length))
         }, reward, done, done, {}
 
-    def reset(self, seed=None, **kwargs):
+    def reset(self, seed=None, sequences_selected=None, **kwargs):
         super().reset(seed=seed, **kwargs)
         self.current_step = 0
         self.acid_amino = []
@@ -104,8 +108,12 @@ class LUCAEnv(gym.Env):
         self.x = []
         self.y = []
         self.z = []
+        self.amino_acid_completed = []
 
-        files = get_all_ss2_files(".")
+        if sequences_selected is None:
+            files = get_all_ss2_files("./data")
+        else:
+            files = get_all_ss2_files(f"./data/{sequences_selected[randint(0, len(sequences_selected) - 1)]}")
         path = files[randint(0, len(files) - 1)]
         predictions = parse_ss2_file(path)
         for prediction in predictions:
@@ -137,13 +145,15 @@ class LUCAEnv(gym.Env):
         }, {}
 
     def render(self, mode='human'):
+        print("====================================================================================================")
         print(f"Current step: {self.current_step}")
         print(f"\tMask position: {self.start_mask_pos}")
-        print(f"\tProtein: {''.join([self.nums_to_AA[aa] for aa in self.acid_amino])}")
+        print(f"\tProtein: {''.join([self.nums_to_AA[int(aa)] for aa in self.acid_amino])}")
         print(f"\tSecondary structure: {''.join([self.nums_to_SS[ss] for ss in self.secondary_structure])}")
         print(f"\tX: {self.x}")
         print(f"\tY: {self.y}")
         print(f"\tZ: {self.z}")
+        print(f"\tPrediction: {self.amino_acid_completed}")
 
     def close(self):
         pass
@@ -185,4 +195,5 @@ def get_all_ss2_files(directory):
                 # If it's an .ss2, construct the full path and add to the list
                 full_path = os.path.join(root, file)
                 ss2_files.append(full_path)
+    if len(ss2_files) == 0: raise FileNotFoundError(f"No .ss2 files found in {directory}")
     return ss2_files
