@@ -29,14 +29,17 @@ class Embedding(nn.Module):
         super(Embedding, self).__init__()
         self.primary_embed = nn.Embedding(input_size, d_model)
         self.ss_embed = nn.Embedding(input_size, d_model)
+        self.cord_encode = nn.Linear(3, d_model)
         self.norm = nn.LayerNorm(d_model)
 
     def forward(self, observation):
         primary_embed = self.primary_embed(observation['primary'].to(dtype=torch.long))
         ss_embed = self.ss_embed(observation['ss'].to(dtype=torch.long))
         embed = primary_embed + ss_embed
-        embed += F.tanh(observation['x'].unsqueeze(-1)) * F.tanh(observation['y'].unsqueeze(-1)) * F.tanh(
-            observation['z'].unsqueeze(-1))
+        concatenated_tensor = torch.cat(
+            (observation['x'].unsqueeze(-1), observation['y'].unsqueeze(-1), observation['y'].unsqueeze(-1)), dim=2)
+        cord_embed = self.cord_encode(concatenated_tensor)
+        embed += cord_embed
         # assert embed.shape == (32, 128, 768)
         return self.norm(embed)
 
